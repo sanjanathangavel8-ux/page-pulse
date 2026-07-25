@@ -9,6 +9,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.models import URLRequest
 from app.services import analyze_url
 from app.middleware import RequestIDMiddleware
+from app.schemas.audit import AuditResponse
 
 # Create FastAPI app
 app = FastAPI(
@@ -117,10 +118,10 @@ async def health():
 # -----------------------------
 # URL Audit API
 # -----------------------------
-@app.post("/audit")
+@app.post(
+    "/audit",
+    response_model=AuditResponse
+)
 @limiter.limit("10/minute")
 async def audit(request: Request, body: URLRequest):
-
-    result = await analyze_url(str(body.url))
-
-    return result
+    return await analyze_url(str(body.url))
