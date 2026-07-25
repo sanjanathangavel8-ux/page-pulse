@@ -1,4 +1,7 @@
 from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
@@ -7,36 +10,49 @@ from app.models import URLRequest
 from app.services import analyze_url
 from app.middleware import RequestIDMiddleware
 
-# Create FastAPI app FIRST
+# Create FastAPI app
 app = FastAPI(
     title="Page Pulse API",
     version="1.0.0",
     description="Production-grade URL Audit API"
 )
 
-# Configure rate limiter
+# Templates
+templates = Jinja2Templates(directory="templates")
+
+# Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
-# Add middleware
+# Middlewares
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(RequestIDMiddleware)
 
-# Home endpoint
-@app.get("/")
-def home():
-    return {
-        "message": "Page Pulse API Running"
-    }
 
-# Health endpoint
+# -----------------------------
+# Home Page
+# -----------------------------
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html"
+    )
+
+# -----------------------------
+# Health Check
+# -----------------------------
 @app.get("/health")
-def health():
+async def health():
     return {
-        "status": "healthy"
+        "status": "healthy",
+        "service": "Page Pulse API"
     }
 
-# Audit endpoint
+
+# -----------------------------
+# URL Audit API
+# -----------------------------
 @app.post("/audit")
 @limiter.limit("10/minute")
 async def audit(request: Request, body: URLRequest):
