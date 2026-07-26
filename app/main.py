@@ -6,10 +6,13 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
 
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.models import URLRequest
 from app.services import analyze_url
 from app.middleware import RequestIDMiddleware
 from app.schemas.audit import AuditResponse
+
 
 
 # Create FastAPI app
@@ -20,18 +23,61 @@ app = FastAPI(
 )
 
 
+
+# -----------------------------
+# CORS CONFIGURATION
+# -----------------------------
+app.add_middleware(
+    CORSMiddleware,
+
+    allow_origins=[
+        "http://localhost:3000",
+        "https://your-vercel-domain.vercel.app",
+        "*"
+    ],
+
+    allow_credentials=True,
+
+    allow_methods=["*"],
+
+    allow_headers=["*"],
+)
+
+
+
+
+
 # Templates
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(
+    directory="templates"
+)
+
+
+
 
 
 # Rate Limiter
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(
+    key_func=get_remote_address
+)
+
 app.state.limiter = limiter
 
 
+
+
+
 # Middlewares
-app.add_middleware(SlowAPIMiddleware)
-app.add_middleware(RequestIDMiddleware)
+app.add_middleware(
+    SlowAPIMiddleware
+)
+
+app.add_middleware(
+    RequestIDMiddleware
+)
+
+
+
 
 
 # -----------------------------
@@ -39,10 +85,14 @@ app.add_middleware(RequestIDMiddleware)
 # -----------------------------
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
+
     return templates.TemplateResponse(
         request=request,
         name="index.html"
     )
+
+
+
 
 
 # -----------------------------
@@ -50,10 +100,14 @@ async def home(request: Request):
 # -----------------------------
 @app.get("/health")
 async def health():
+
     return {
         "status": "healthy",
         "service": "Page Pulse API"
     }
+
+
+
 
 
 # -----------------------------
@@ -64,8 +118,13 @@ async def health():
     response_model=AuditResponse
 )
 @limiter.limit("10/minute")
-async def audit(request: Request, body: URLRequest):
+async def audit(
+    request: Request,
+    body: URLRequest
+):
 
-    result = await analyze_url(str(body.url))
+    result = await analyze_url(
+        str(body.url)
+    )
 
     return result
