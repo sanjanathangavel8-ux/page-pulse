@@ -1,83 +1,182 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
-from slowapi import Limiter
-from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
+import httpx
+from bs4 import BeautifulSoup
+import time
 
-from app.models import URLRequest
-from app.services import analyze_url
-from app.middleware import RequestIDMiddleware
 
 app = FastAPI(
     title="Page Pulse API",
     version="1.0.0",
-    description="Production-grade URL Audit API",
 )
 
-# -----------------------------
-# CORS
-# -----------------------------
+
+# ==========================
+# CORS CONFIGURATION
+# ==========================
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # Temporary for development
-    allow_credentials=False,
-    allow_methods=["*"],
+
+    # Frontend URLs
+    allow_origins=[
+        "http://localhost:3000",
+        "https://page-pulse.vercel.app",
+    ],
+
+    allow_credentials=True,
+
+    allow_methods=[
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "OPTIONS",
+    ],
+
     allow_headers=["*"],
 )
 
-# -----------------------------
-# Other Middlewares
-# -----------------------------
-app.add_middleware(RequestIDMiddleware)
-app.add_middleware(SlowAPIMiddleware)
 
-# -----------------------------
-# Templates
-# -----------------------------
-templates = Jinja2Templates(directory="templates")
+# ==========================
+# REQUEST MODEL
+# ==========================
 
-# -----------------------------
-# Rate Limiter
-# -----------------------------
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
+class AuditRequest(BaseModel):
+    url: str
 
-# -----------------------------
-# Home
-# -----------------------------
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-        },
-    )
 
-# -----------------------------
-# Health
-# -----------------------------
-@app.get("/health")
-async def health():
+
+# ==========================
+# ROOT
+# ==========================
+
+@app.get("/")
+def root():
     return {
-        "status": "healthy",
-        "service": "Page Pulse API",
+        "message": "Page Pulse API running"
     }
 
-# -----------------------------
-# Preflight OPTIONS
-# -----------------------------
-@app.options("/{path:path}")
-async def options_handler(path: str):
-    return {"ok": True}
 
-# -----------------------------
-# Audit
-# -----------------------------
+
+# ==========================
+# HEALTH CHECK
+# ==========================
+
+@app.get("/health")
+def health():
+
+    return {
+        "status": "healthy",
+        "service": "Page Pulse API"
+    }
+
+
+
+# ==========================
+# AUDIT ENDPOINT
+# ==========================
+
 @app.post("/audit")
-@limiter.limit("10/minute")
-async def audit(request: Request, body: URLRequest):
-    return await analyze_url(str(body.url))
+async def audit(
+    request: AuditRequest
+):
+
+    url = request.url
+
+
+    start = time.time()
+
+
+    async with httpx.AsyncClient(
+        follow_redirects=True,
+        timeout=20
+    ) as client:
+
+        response = await client.get(url)
+
+
+    response_time = (
+        time.time() - start
+    )
+
+
+    soup = BeautifulSoup(
+        response.text,
+        "html.parser"
+    )
+
+
+    title = (
+        soup.title.text
+        if soup.title
+        else "No title"
+    )
+
+
+    meta = soup.find(
+        "meta",
+        attrs={
+            "name": "description"
+        }
+    )
+
+
+    description = (
+        meta["content"]
+        if meta
+        else "No description"
+    )
+
+
+    return {
+
+        "health_score": 90,
+
+        "performance": {
+
+            "status": "Good",
+
+            "response_time":
+                f"{response_time:.2f}s"
+
+        },
+
+
+        "seo": {
+
+            "title": title,
+
+            "meta_description":
+                description
+
+        },
+
+
+        "security": {
+
+            "https":
+                url.startswith("https")
+
+        },
+
+
+        "technical": {
+
+            "status_code":
+                response.status_code
+
+        },
+
+
+        "recommendations": [
+
+            "Optimize images",
+
+            "Improve page loading speed"
+
+        ]
+
+    }
