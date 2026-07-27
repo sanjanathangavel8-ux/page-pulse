@@ -14,38 +14,52 @@ from app.middleware import RequestIDMiddleware
 app = FastAPI(
     title="Page Pulse API",
     version="1.0.0",
-    description="Production-grade URL Audit API"
+    description="Production-grade URL Audit API",
 )
 
+# -----------------------------
 # CORS
+# -----------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://page-pulse-frontend.vercel.app",
-    ],
+    allow_origins=["*"],   # Temporary for development
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-templates = Jinja2Templates(directory="templates")
-
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-
+# -----------------------------
+# Other Middlewares
+# -----------------------------
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 
+# -----------------------------
+# Templates
+# -----------------------------
+templates = Jinja2Templates(directory="templates")
 
+# -----------------------------
+# Rate Limiter
+# -----------------------------
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+# -----------------------------
+# Home
+# -----------------------------
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse(
         "index.html",
-        {"request": request},
+        {
+            "request": request,
+        },
     )
 
-
+# -----------------------------
+# Health
+# -----------------------------
 @app.get("/health")
 async def health():
     return {
@@ -53,12 +67,16 @@ async def health():
         "service": "Page Pulse API",
     }
 
+# -----------------------------
+# Preflight OPTIONS
+# -----------------------------
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    return {"ok": True}
 
-@app.options("/{full_path:path}")
-async def preflight(full_path: str):
-    return {}
-
-
+# -----------------------------
+# Audit
+# -----------------------------
 @app.post("/audit")
 @limiter.limit("10/minute")
 async def audit(request: Request, body: URLRequest):
