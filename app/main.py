@@ -1,12 +1,11 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
-
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.models import URLRequest
 from app.services import analyze_url
@@ -14,85 +13,47 @@ from app.middleware import RequestIDMiddleware
 from app.schemas.audit import AuditResponse
 
 
-
 # Create FastAPI app
 app = FastAPI(
     title="Page Pulse API",
     version="1.0.0",
-    description="Production-grade URL Audit API"
+    description="Production-grade URL Audit API",
 )
 
-
-
 # -----------------------------
-# CORS CONFIGURATION
+# CORS
 # -----------------------------
 app.add_middleware(
     CORSMiddleware,
-
     allow_origins=[
         "http://localhost:3000",
-        "https://your-vercel-domain.vercel.app",
-        "*"
     ],
-
     allow_credentials=True,
-
     allow_methods=["*"],
-
     allow_headers=["*"],
 )
 
-
-
-
-
 # Templates
-templates = Jinja2Templates(
-    directory="templates"
-)
-
-
-
-
+templates = Jinja2Templates(directory="templates")
 
 # Rate Limiter
-limiter = Limiter(
-    key_func=get_remote_address
-)
-
+limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
-
-
-
-
-# Middlewares
-app.add_middleware(
-    SlowAPIMiddleware
-)
-
-app.add_middleware(
-    RequestIDMiddleware
-)
-
-
-
+# Other Middlewares
+app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(RequestIDMiddleware)
 
 
 # -----------------------------
-# Home Page
+# Home
 # -----------------------------
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-
     return templates.TemplateResponse(
-        request=request,
-        name="index.html"
+        "index.html",
+        {"request": request},
     )
-
-
-
 
 
 # -----------------------------
@@ -100,31 +61,22 @@ async def home(request: Request):
 # -----------------------------
 @app.get("/health")
 async def health():
-
     return {
         "status": "healthy",
-        "service": "Page Pulse API"
+        "service": "Page Pulse API",
     }
 
 
-
-
-
 # -----------------------------
-# URL Audit API
+# Audit Endpoint
 # -----------------------------
 @app.post(
     "/audit",
-    response_model=AuditResponse
+    response_model=AuditResponse,
 )
 @limiter.limit("10/minute")
 async def audit(
     request: Request,
-    body: URLRequest
+    body: URLRequest,
 ):
-
-    result = await analyze_url(
-        str(body.url)
-    )
-
-    return result
+    return await analyze_url(str(body.url))
